@@ -64,6 +64,9 @@ export async function POST(req) {
       async start(controller) {
         try {
           for await (const chunk of responseStream) {
+            if (req.signal.aborted) {
+              break;
+            }
             const text = chunk.message.content;
             assistantFullResponse += text;
             controller.enqueue(encoder.encode(text));

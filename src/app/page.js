@@ -22,6 +22,8 @@ export default function Home() {
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const lastScrollTopRef = useRef(0);
+  const abortControllerRef = useRef(null);
 
   // Initial load
   useEffect(() => {
@@ -39,9 +41,15 @@ export default function Home() {
     if (!messagesContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     
-    // If user is more than 60px away from the bottom, they have scrolled up
-    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 60;
-    setIsAutoScrollEnabled(!isScrolledUp);
+    if (scrollTop < lastScrollTopRef.current) {
+      // User scrolled up
+      setIsAutoScrollEnabled(false);
+    } else if (scrollHeight - scrollTop - clientHeight <= 10) {
+      // User reached the bottom
+      setIsAutoScrollEnabled(true);
+    }
+    
+    lastScrollTopRef.current = scrollTop;
   };
 
   const scrollToBottom = () => {
@@ -73,6 +81,12 @@ export default function Home() {
     setMessages([]);
   };
 
+  const stopGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
   const sendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!input.trim() || isTyping) return;
@@ -95,11 +109,14 @@ export default function Home() {
     const assistantMessage = { role: 'assistant', content: '' };
     setMessages((prev) => [...prev, assistantMessage]);
 
+    abortControllerRef.current = new AbortController();
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: currentChatId, content: userMessage.content })
+        body: JSON.stringify({ chatId: currentChatId, content: userMessage.content }),
+        signal: abortControllerRef.current.signal
       });
 
       if (!response.ok) throw new Error('Network response was not ok');
@@ -126,9 +143,22 @@ export default function Home() {
       // Refresh chat list to update title
       fetchChats();
     } catch (error) {
-      console.error('Streaming error:', error);
+      if (error.name === 'AbortError') {
+        console.log('Generation stopped by user');
+      } else {
+        console.error('Streaming error:', error);
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          if (newMessages[lastIndex].role === 'assistant' && !newMessages[lastIndex].content) {
+            newMessages[lastIndex].content = "⚠️ **Qwen is sleeping.** The local AI server is unreachable or encountered an error. Please make sure Ollama is running.";
+          }
+          return newMessages;
+        });
+      }
     } finally {
       setIsTyping(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -208,9 +238,15 @@ export default function Home() {
               placeholder="Message Qwen..."
               rows={1}
             />
-            <button className="send-btn" onClick={sendMessage} disabled={!input.trim() || isTyping}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
+            {isTyping ? (
+              <button className="send-btn stop-btn" onClick={stopGeneration} title="Stop generation">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
+              </button>
+            ) : (
+              <button className="send-btn" onClick={sendMessage} disabled={!input.trim()}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            )}
           </div>
         </div>
       </main>
