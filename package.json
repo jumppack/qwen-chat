@@ -9,11 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@lancedb/lancedb": "^0.27.2",
     "@prisma/client": "^6.4.1",
     "highlight.js": "^11.11.1",
+    "mammoth": "^1.12.0",
     "marked": "^18.0.2",
     "next": "16.2.4",
     "ollama": "^0.6.3",
+    "pdf-parse": "^2.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "uuid": "^13.0.0"

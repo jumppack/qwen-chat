@@ -25,9 +25,26 @@ export default function Home() {
   const lastScrollTopRef = useRef(0);
   const abortControllerRef = useRef(null);
 
+  const selectChat = async (id) => {
+    setActiveChatId(id);
+    const res = await fetch(`/api/chats/${id}`);
+    const data = await res.json();
+    setMessages(data.messages || []);
+  };
+
+  const fetchChats = async () => {
+    const res = await fetch('/api/chats');
+    const data = await res.json();
+    setChats(data);
+    if (data.length > 0 && !activeChatId) {
+      selectChat(data[0].id);
+    }
+  };
+
   // Initial load
   useEffect(() => {
     fetchChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto scroll
@@ -57,21 +74,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const fetchChats = async () => {
-    const res = await fetch('/api/chats');
-    const data = await res.json();
-    setChats(data);
-    if (data.length > 0 && !activeChatId) {
-      selectChat(data[0].id);
-    }
-  };
 
-  const selectChat = async (id) => {
-    setActiveChatId(id);
-    const res = await fetch(`/api/chats/${id}`);
-    const data = await res.json();
-    setMessages(data.messages || []);
-  };
 
   const createNewChat = async () => {
     const res = await fetch('/api/chats', { method: 'POST' });
