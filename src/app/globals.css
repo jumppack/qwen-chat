@@ -281,3 +281,106 @@ textarea:focus {
 .scroll-popout:hover {
   background-color: var(--accent-hover);
 }
+
+/* Attach Button */
+.attach-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.attach-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+/* Staged File Pills */
+.staged-files {
+  max-width: 800px;
+  margin: 0 auto 0.6rem auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.file-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background-color: var(--sidebar-bg);
+  color: var(--text-secondary);
+  max-width: 260px;
+  transition: border-color 0.2s;
+}
+
+.file-pill.uploading {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.file-pill.ready {
+  border-color: #10a37f;
+  color: #10a37f;
+}
+
+.file-pill.error {
+  border-color: #e05252;
+  color: #e05252;
+}
+
+.pill-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.pill-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.pill-remove:hover {
+  opacity: 1;
+}
+
+/* Upload Spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.pill-spinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}

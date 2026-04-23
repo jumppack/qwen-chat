@@ -20,10 +20,12 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [stagedFiles, setStagedFiles] = useState([]); // { id, name, status: 'uploading'|'ready'|'error', documentId }
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const lastScrollTopRef = useRef(0);
   const abortControllerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const selectChat = async (id) => {
     setActiveChatId(id);
@@ -43,6 +45,7 @@ export default function Home() {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchChats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -90,6 +93,49 @@ export default function Home() {
     }
   };
 
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    // Reset input so the same file can be re-selected if needed
+    e.target.value = '';
+
+    for (const file of files) {
+      const stagingId = `${file.name}-${Date.now()}`;
+
+      // Immediately show pill in 'uploading' state
+      setStagedFiles((prev) => [
+        ...prev,
+        { id: stagingId, name: file.name, status: 'uploading', documentId: null },
+      ]);
+
+      // Background upload
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/documents', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (res.ok && data.documentId) {
+          setStagedFiles((prev) =>
+            prev.map((f) =>
+              f.id === stagingId ? { ...f, status: 'ready', documentId: data.documentId } : f
+            )
+          );
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+      } catch {
+        setStagedFiles((prev) =>
+          prev.map((f) => (f.id === stagingId ? { ...f, status: 'error' } : f))
+        );
+      }
+    }
+  };
+
+  const removeStagedFile = (stagingId) => {
+    setStagedFiles((prev) => prev.filter((f) => f.id !== stagingId));
+  };
+
   const sendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!input.trim() || isTyping) return;
@@ -103,9 +149,14 @@ export default function Home() {
       setActiveChatId(currentChatId);
     }
 
+    const readyDocumentIds = stagedFiles
+      .filter((f) => f.status === 'ready')
+      .map((f) => f.documentId);
+
     const userMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    setStagedFiles([]);
     setIsTyping(true);
 
     // Prepare assistant message stub
@@ -118,7 +169,11 @@ export default function Home() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: currentChatId, content: userMessage.content }),
+        body: JSON.stringify({
+          chatId: currentChatId,
+          content: userMessage.content,
+          documents: readyDocumentIds,
+        }),
         signal: abortControllerRef.current.signal
       });
 
@@ -233,7 +288,61 @@ export default function Home() {
 
         {/* Input Area */}
         <div className="input-area">
+          {/* Staged file pills */}
+          {stagedFiles.length > 0 && (
+            <div className="staged-files">
+              {stagedFiles.map((f) => (
+                <div
+                  key={f.id}
+                  className={`file-pill ${
+                    f.status === 'uploading' ? 'uploading' : f.status === 'error' ? 'error' : 'ready'
+                  }`}
+                >
+                  {f.status === 'uploading' && (
+                    <span className="pill-spinner" aria-label="Uploading" />
+                  )}
+                  {f.status === 'ready' && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  )}
+                  {f.status === 'error' && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  )}
+                  <span className="pill-name">{f.name}</span>
+                  <button
+                    className="pill-remove"
+                    onClick={() => removeStagedFile(f.id)}
+                    title="Remove file"
+                    aria-label="Remove file"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+          />
+
           <div className="input-container">
+            {/* Attach button */}
+            <button
+              className="attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach a file"
+              aria-label="Attach a file"
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
