@@ -21,6 +21,7 @@ export default function Home() {
   const [isTyping, setIsTyping] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [stagedFiles, setStagedFiles] = useState([]); // { id, name, status: 'uploading'|'ready'|'error', documentId }
+  const isUploading = stagedFiles.some((f) => f.status === 'uploading');
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const lastScrollTopRef = useRef(0);
@@ -346,8 +347,8 @@ export default function Home() {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Message Qwen..."
+              onKeyDown={(e) => !isUploading && handleKeyDown(e)}
+              placeholder={isUploading ? 'Waiting for upload to finish...' : 'Message Qwen...'}
               rows={1}
             />
             {isTyping ? (
@@ -355,7 +356,12 @@ export default function Home() {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
               </button>
             ) : (
-              <button className="send-btn" onClick={sendMessage} disabled={!input.trim()}>
+              <button
+                className="send-btn"
+                onClick={sendMessage}
+                disabled={!input.trim() || isUploading}
+                title={isUploading ? 'Waiting for file to finish uploading...' : undefined}
+              >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
               </button>
             )}
