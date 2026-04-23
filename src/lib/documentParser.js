@@ -1,9 +1,12 @@
-import pdfParse from 'pdf-parse';
+import { createRequire } from 'module';
 import mammoth from 'mammoth';
+
+const require = createRequire(import.meta.url);
 
 export async function parseDocument(fileBuffer, mimeType) {
   try {
     if (mimeType === 'application/pdf') {
+      const pdfParse = require('pdf-parse');
       const data = await pdfParse(fileBuffer);
       return data.text;
     } else if (

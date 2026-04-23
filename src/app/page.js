@@ -298,25 +298,38 @@ export default function Home() {
                   className={`file-pill ${
                     f.status === 'uploading' ? 'uploading' : f.status === 'error' ? 'error' : 'ready'
                   }`}
+                  title={
+                    f.status === 'uploading' ? 'Processing & embedding file...' :
+                    f.status === 'ready'    ? '✓ File embedded and ready for RAG' :
+                                             '✗ Upload failed — click × to dismiss and try again'
+                  }
                 >
+                  {/* Status icon */}
                   {f.status === 'uploading' && (
                     <span className="pill-spinner" aria-label="Uploading" />
                   )}
                   {f.status === 'ready' && (
+                    // Checkmark
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                   )}
                   {f.status === 'error' && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    // Warning triangle — distinct from the remove ×
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                   )}
+
                   <span className="pill-name">{f.name}</span>
-                  <button
-                    className="pill-remove"
-                    onClick={() => removeStagedFile(f.id)}
-                    title="Remove file"
-                    aria-label="Remove file"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
+
+                  {/* Remove button — hidden while uploading so there's only ever one × */}
+                  {f.status !== 'uploading' && (
+                    <button
+                      className="pill-remove"
+                      onClick={() => removeStagedFile(f.id)}
+                      title="Remove"
+                      aria-label="Remove file"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
