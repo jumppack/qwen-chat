@@ -53,29 +53,38 @@ export async function POST(req) {
 
     // 3. RAG Retrieval — only if document IDs were supplied
     if (Array.isArray(documentIds) && documentIds.length > 0) {
+      console.log(`[RAG] Request received with ${documentIds.length} documentId(s):`, documentIds);
       try {
         // Embed the user's latest question
         const queryVector = await generateEmbedding(content);
+        console.log(`[RAG] Embedding generated, vector length: ${queryVector.length}`);
 
         // Connect to LanceDB and search the documents table
         const db = await lancedb.connect('.lancedb');
 
         // Guard: table may not exist yet if no document has been fully ingested
         const tableNames = await db.tableNames();
+        console.log(`[RAG] LanceDB tables found:`, tableNames);
+
         if (!tableNames.includes('documents')) {
           console.warn('[RAG] documents table does not exist yet, skipping retrieval.');
         } else {
           const table = await db.openTable('documents');
 
-          // Retrieve top 5 nearest chunks, then filter to only the uploaded document IDs
-          const rawResults = await table
+          // LanceDB query.toArray() returns a plain JS array directly (no Arrow conversion needed)
+          const rawArray = await table
             .search(queryVector)
             .limit(10)
-            .execute();
+            .toArray();
 
-          const results = rawResults
+          console.log(`[RAG] Raw search returned ${rawArray.length} results`);
+          console.log(`[RAG] Raw result documentIds:`, rawArray.map(r => r.documentId));
+
+          const results = rawArray
             .filter(row => documentIds.includes(row.documentId))
             .slice(0, 5);
+
+          console.log(`[RAG] After filtering to requested documentIds: ${results.length} results`);
 
           if (results.length > 0) {
             const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
@@ -92,13 +101,17 @@ export async function POST(req) {
 
             // Insert just before the last message (the user's current question)
             messages.splice(messages.length - 1, 0, ragMessage);
-            console.log(`[RAG] Injected ${results.length} chunks from ${documentIds.length} document(s).`);
+            console.log(`[RAG] ✓ Injected ${results.length} chunks from ${documentIds.length} document(s).`);
+          } else {
+            console.warn('[RAG] ✗ No matching chunks found after filter — context NOT injected.');
           }
         }
       } catch (ragError) {
         // Graceful fallback: log and continue with a standard chat response
         console.error('[RAG] Vector retrieval failed, falling back to standard chat:', ragError);
       }
+    } else {
+      console.log('[RAG] No documentIds in payload — standard chat mode.');
     }
 
     // 4. Request streaming response from Ollama
