@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import ollama from 'ollama';
+import * as lancedb from '@lancedb/lancedb';
+import { generateEmbedding } from '@/lib/embeddings';
 
 export async function POST(req) {
   try {
-    const { chatId, content } = await req.json();
+    const { chatId, content, documents: documentIds } = await req.json();
 
     if (!chatId || !content) {
       return new Response(JSON.stringify({ error: 'Missing chatId or content' }), { status: 400 });
@@ -49,14 +51,57 @@ export async function POST(req) {
       });
     }
 
-    // 3. Request streaming response from Ollama
+    // 3. RAG Retrieval — only if document IDs were supplied
+    if (Array.isArray(documentIds) && documentIds.length > 0) {
+      try {
+        // Embed the user's latest question
+        const queryVector = await generateEmbedding(content);
+
+        // Connect to LanceDB and search the documents table
+        const db = await lancedb.connect('.lancedb');
+        const table = await db.openTable('documents');
+
+        // Retrieve top 5 nearest chunks, then filter to only the uploaded document IDs
+        const rawResults = await table
+          .search(queryVector)
+          .limit(10)
+          .execute();
+
+        const results = rawResults
+          .filter(row => documentIds.includes(row.documentId))
+          .slice(0, 5);
+
+        if (results.length > 0) {
+          const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
+
+          // Splice RAG context as a temporary system message immediately before
+          // the final user message (index -1 from end). Never persisted to the DB.
+          const ragMessage = {
+            role: 'system',
+            content:
+              'Use the following context retrieved from the user\'s uploaded documents to answer their question. ' +
+              'If the answer is not contained in the context, say so clearly.\n\n' +
+              'Context:\n\n' + retrievedContext
+          };
+
+          // Insert just before the last message (the user's current question)
+          messages.splice(messages.length - 1, 0, ragMessage);
+          console.log(`[RAG] Injected ${results.length} chunks from ${documentIds.length} document(s).`);
+        }
+      } catch (ragError) {
+        // Graceful fallback: log and continue with a standard chat response
+        console.error('[RAG] Vector retrieval failed, falling back to standard chat:', ragError);
+      }
+    }
+
+    // 4. Request streaming response from Ollama
     const responseStream = await ollama.chat({
       model: 'qwen2.5-coder:32b',
       messages,
       stream: true,
     });
 
-    // 4. Create a ReadableStream to send to the client and save to DB
+    // 5. Create a ReadableStream to send to the client and save to DB
     const encoder = new TextEncoder();
     let assistantFullResponse = '';
 
@@ -75,7 +120,7 @@ export async function POST(req) {
           console.error("Stream error", e);
           controller.error(e);
         } finally {
-          // 5. When done streaming, save the assistant message
+          // 6. When done streaming, save the assistant message
           if (assistantFullResponse) {
             await prisma.message.create({
               data: {
@@ -107,3 +152,4 @@ export async function POST(req) {
     return new Response(JSON.stringify({ error: 'Failed to process chat' }), { status: 500 });
   }
 }
+
