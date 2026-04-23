@@ -71,44 +71,41 @@ export async function POST(req) {
         } else {
           const table = await db.openTable('documents');
 
-          // LanceDB query.toArray() returns a plain JS array directly (no Arrow conversion needed)
+          // LanceDB query.toArray() returns a plain JS array directly
           const rawArray = await table
             .search(queryVector)
-            .limit(10)
+            .limit(20) // Retrieve more candidates
             .toArray();
-
-          console.log(`[RAG] Raw search returned ${rawArray.length} results`);
-          console.log(`[RAG] Raw result documentIds:`, rawArray.map(r => r.documentId));
 
           const results = rawArray
             .filter(row => documentIds.includes(row.documentId))
-            .slice(0, 5);
-
-          console.log(`[RAG] After filtering to requested documentIds: ${results.length} results`);
+            .slice(0, 10); // Provide more context chunks (approx 5000 chars)
 
           if (results.length > 0) {
             const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
 
-            // Splice RAG context as a temporary system message immediately before
-            // the final user message (index -1 from end). Never persisted to the DB.
             const ragMessage = {
               role: 'system',
               content:
-                'Use the following context retrieved from the user\'s uploaded documents to answer their question. ' +
-                'If the answer is not contained in the context, say so clearly.\n\n' +
-                'Context:\n\n' + retrievedContext
+                'CRITICAL: The user has uploaded one or more documents. Below are highly relevant snippets ' +
+                'from those documents. Use ONLY this information to answer if possible. ' +
+                'If the user asks for a summary of a specific part (like a chapter), use these snippets ' +
+                'to provide the most accurate details from the text. ' +
+                'If the context is insufficient, state that clearly but try your best with what is provided.\n\n' +
+                '--- DOCUMENT CONTEXT START ---\n' + 
+                retrievedContext + 
+                '\n--- DOCUMENT CONTEXT END ---'
             };
 
             // Insert just before the last message (the user's current question)
             messages.splice(messages.length - 1, 0, ragMessage);
-            console.log(`[RAG] ✓ Injected ${results.length} chunks from ${documentIds.length} document(s).`);
+            console.log(`[RAG] ✓ Injected ${results.length} chunks into context.`);
           } else {
-            console.warn('[RAG] ✗ No matching chunks found after filter — context NOT injected.');
+            console.warn('[RAG] ✗ No matching chunks found for this query.');
           }
         }
       } catch (ragError) {
-        // Graceful fallback: log and continue with a standard chat response
-        console.error('[RAG] Vector retrieval failed, falling back to standard chat:', ragError);
+        console.error('[RAG] Retrieval Error:', ragError);
       }
     } else {
       console.log('[RAG] No documentIds in payload — standard chat mode.');

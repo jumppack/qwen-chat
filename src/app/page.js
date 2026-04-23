@@ -58,6 +58,11 @@ export default function Home() {
     }
   }, [messages, isTyping, isAutoScrollEnabled]);
 
+  // Clear staged files when switching chats
+  useEffect(() => {
+    setStagedFiles([]);
+  }, [activeChatId]);
+
   const handleScroll = () => {
     if (!messagesContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
@@ -157,7 +162,7 @@ export default function Home() {
     const userMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setStagedFiles([]);
+    // setStagedFiles([]); // REMOVED: keep files attached for follow-up questions
     setIsTyping(true);
 
     // Prepare assistant message stub
