@@ -5,7 +5,7 @@ import { generateEmbedding } from '@/lib/embeddings';
 
 export async function POST(req) {
   try {
-    const { chatId, content, documents: documentIds } = await req.json();
+    const { chatId, content, documents: documentMetas } = await req.json();
 
     if (!chatId || !content) {
       return new Response(JSON.stringify({ error: 'Missing chatId or content' }), { status: 400 });
@@ -19,6 +19,29 @@ export async function POST(req) {
         content
       }
     });
+
+    // 1.5 Persist document metadata if provided
+    if (Array.isArray(documentMetas) && documentMetas.length > 0) {
+      for (const doc of documentMetas) {
+        // Use upsert to avoid duplicates if the message is retried or sent with same docs
+        await prisma.attachedDocument.upsert({
+          where: { 
+            // We need a unique constraint for upsert to work effectively, 
+            // or we just use findFirst + create.
+            // Since we don't have a unique constraint on (chatId, documentId), 
+            // let's just do a check then create.
+            id: `${chatId}-${doc.documentId}` // We'll manually construct a deterministic ID for idempotency
+          },
+          update: {},
+          create: {
+            id: `${chatId}-${doc.documentId}`,
+            chatId,
+            documentId: doc.documentId,
+            name: doc.name
+          }
+        }).catch(err => console.error('[RAG] Metadata persist error:', err));
+      }
+    }
 
     // 2. Fetch full history for context
     const chat = await prisma.chat.findUnique({
@@ -51,35 +74,32 @@ export async function POST(req) {
       });
     }
 
-    // 3. RAG Retrieval — only if document IDs were supplied
-    if (Array.isArray(documentIds) && documentIds.length > 0) {
-      console.log(`[RAG] Request received with ${documentIds.length} documentId(s):`, documentIds);
+    // 3. RAG Retrieval — only if document metadata was supplied
+    if (Array.isArray(documentMetas) && documentMetas.length > 0) {
+      const docIds = documentMetas.map(d => d.documentId);
+      console.log(`[RAG] Request received with ${docIds.length} documentId(s)`);
+      
       try {
-        // Embed the user's latest question
         const queryVector = await generateEmbedding(content);
-        console.log(`[RAG] Embedding generated, vector length: ${queryVector.length}`);
 
-        // Connect to LanceDB and search the documents table
+        // Connect to LanceDB
         const db = await lancedb.connect('.lancedb');
-
-        // Guard: table may not exist yet if no document has been fully ingested
         const tableNames = await db.tableNames();
-        console.log(`[RAG] LanceDB tables found:`, tableNames);
 
         if (!tableNames.includes('documents')) {
-          console.warn('[RAG] documents table does not exist yet, skipping retrieval.');
+          console.warn('[RAG] documents table does not exist yet.');
         } else {
           const table = await db.openTable('documents');
 
-          // LanceDB query.toArray() returns a plain JS array directly
-          const rawArray = await table
+          // OPTIMIZATION: Use native LanceDB SQL-like filtering for the specific document IDs
+          // Format: documentId IN ("id1", "id2")
+          const filterStr = `documentId IN (${docIds.map(id => `"${id}"`).join(', ')})`;
+          
+          const results = await table
             .search(queryVector)
-            .limit(20) // Retrieve more candidates
+            .where(filterStr)
+            .limit(10)
             .toArray();
-
-          const results = rawArray
-            .filter(row => documentIds.includes(row.documentId))
-            .slice(0, 10); // Provide more context chunks (approx 5000 chars)
 
           if (results.length > 0) {
             const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
@@ -87,28 +107,23 @@ export async function POST(req) {
             const ragMessage = {
               role: 'system',
               content:
-                'CRITICAL: The user has uploaded one or more documents. Below are highly relevant snippets ' +
-                'from those documents. Use ONLY this information to answer if possible. ' +
-                'If the user asks for a summary of a specific part (like a chapter), use these snippets ' +
-                'to provide the most accurate details from the text. ' +
-                'If the context is insufficient, state that clearly but try your best with what is provided.\n\n' +
+                'CRITICAL: The user has uploaded relevant documents. Below are excerpts. ' +
+                'Use ONLY this information to answer if possible.\n\n' +
                 '--- DOCUMENT CONTEXT START ---\n' + 
                 retrievedContext + 
                 '\n--- DOCUMENT CONTEXT END ---'
             };
 
-            // Insert just before the last message (the user's current question)
+            // Insert just before the last message
             messages.splice(messages.length - 1, 0, ragMessage);
-            console.log(`[RAG] ✓ Injected ${results.length} chunks into context.`);
-          } else {
-            console.warn('[RAG] ✗ No matching chunks found for this query.');
+            console.log(`[RAG] ✓ Injected ${results.length} chunks.`);
           }
         }
       } catch (ragError) {
         console.error('[RAG] Retrieval Error:', ragError);
       }
     } else {
-      console.log('[RAG] No documentIds in payload — standard chat mode.');
+      console.log('[RAG] Standard chat mode (no documents).');
     }
 
     // 4. Request streaming response from Ollama

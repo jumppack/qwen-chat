@@ -14,6 +14,9 @@ export async function GET(request, { params }) {
       include: {
         messages: {
           orderBy: { createdAt: 'asc' }
+        },
+        documents: {
+          orderBy: { createdAt: 'asc' }
         }
       }
     });
@@ -29,12 +32,28 @@ export async function GET(request, { params }) {
   }
 }
 
+import { deleteDocumentVectors } from '@/lib/vectorStore';
+
 export async function DELETE(request, { params }) {
   try {
     const { chatId } = await params;
+    
+    // 1. Fetch all associated document IDs first
+    const attachedDocs = await prisma.attachedDocument.findMany({
+      where: { chatId }
+    });
+
+    // 2. Cleanup vectors in LanceDB
+    for (const doc of attachedDocs) {
+      await deleteDocumentVectors(doc.documentId);
+    }
+
+    // 3. Delete the chat (Cascade will handle AttachedDocument records in SQLite)
     await prisma.chat.delete({ where: { id: chatId } });
+    
     return NextResponse.json({ success: true });
   } catch (error) {
+    console.error('Failed to delete chat:', error);
     return NextResponse.json({ error: 'Failed to delete chat' }, { status: 500 });
   }
 }

@@ -54,3 +54,23 @@ export async function storeDocumentChunks(documentId, text) {
 
   return records.length;
 }
+
+/**
+ * Removes all vector chunks associated with a specific documentId from LanceDB.
+ */
+export async function deleteDocumentVectors(documentId) {
+  try {
+    const db = await lancedb.connect('.lancedb');
+    const tableNames = await db.tableNames();
+    
+    if (tableNames.includes('documents')) {
+      const table = await db.openTable('documents');
+      // LanceDB delete takes a filter string
+      await table.delete(`documentId = "${documentId}"`);
+      console.log(`[LanceDB] Deleted vectors for documentId: ${documentId}`);
+    }
+  } catch (error) {
+    console.error('[LanceDB] Error deleting vectors:', error);
+    throw error;
+  }
+}

@@ -33,6 +33,19 @@ export default function Home() {
     const res = await fetch(`/api/chats/${id}`);
     const data = await res.json();
     setMessages(data.messages || []);
+    
+    // Hydrate staged files from persistent storage
+    if (data.documents) {
+      const hydratedFiles = data.documents.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        status: 'ready',
+        documentId: doc.documentId
+      }));
+      setStagedFiles(hydratedFiles);
+    } else {
+      setStagedFiles([]);
+    }
   };
 
   const fetchChats = async () => {
@@ -155,9 +168,9 @@ export default function Home() {
       setActiveChatId(currentChatId);
     }
 
-    const readyDocumentIds = stagedFiles
+    const readyDocuments = stagedFiles
       .filter((f) => f.status === 'ready')
-      .map((f) => f.documentId);
+      .map((f) => ({ documentId: f.documentId, name: f.name }));
 
     const userMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -178,7 +191,7 @@ export default function Home() {
         body: JSON.stringify({
           chatId: currentChatId,
           content: userMessage.content,
-          documents: readyDocumentIds,
+          documents: readyDocuments,
         }),
         signal: abortControllerRef.current.signal
       });
