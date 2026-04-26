@@ -27,6 +27,9 @@ export default function Home() {
   const lastScrollTopRef = useRef(0);
   const abortControllerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [libraryDocs, setLibraryDocs] = useState([]);
+  const [isDeleting, setIsDeleting] = useState(null); // documentId
 
   const selectChat = async (id) => {
     setActiveChatId(id);
@@ -94,6 +97,28 @@ export default function Home() {
   const scrollToBottom = () => {
     setIsAutoScrollEnabled(true);
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const openLibrary = async () => {
+    setIsLibraryOpen(true);
+    const res = await fetch('/api/documents/list');
+    const data = await res.json();
+    setLibraryDocs(data);
+  };
+
+  const deleteDocumentGlobally = async (documentId) => {
+    if (!confirm('Are you sure? This will remove the document from ALL chats.')) return;
+    setIsDeleting(documentId);
+    try {
+      await fetch(`/api/documents/${documentId}`, { method: 'DELETE' });
+      setLibraryDocs(prev => prev.filter(d => d.documentId !== documentId));
+      // Also remove from current staged files if present
+      setStagedFiles(prev => prev.filter(f => f.documentId !== documentId));
+    } catch (error) {
+      console.error('Delete error:', error);
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
 
@@ -265,6 +290,10 @@ export default function Home() {
             </div>
           ))}
         </div>
+        <button className="library-btn" onClick={openLibrary}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          Manage Library
+        </button>
       </aside>
 
       {/* Main Chat Area */}
@@ -399,6 +428,41 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Library Modal */}
+      {isLibraryOpen && (
+        <div className="modal-overlay" onClick={() => setIsLibraryOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <header className="modal-header">
+              <h2>Local Knowledge Base</h2>
+              <button className="close-btn" onClick={() => setIsLibraryOpen(false)}>&times;</button>
+            </header>
+            <div className="modal-body">
+              {libraryDocs.length === 0 ? (
+                <div className="empty-library">No documents ingested yet.</div>
+              ) : (
+                <div className="library-list">
+                  {libraryDocs.map(doc => (
+                    <div key={doc.documentId} className="library-item">
+                      <div className="doc-info">
+                        <span className="doc-name">{doc.name}</span>
+                        <span className="doc-date">Added on {new Date(doc.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <button 
+                        className="delete-doc-btn" 
+                        onClick={() => deleteDocumentGlobally(doc.documentId)}
+                        disabled={isDeleting === doc.documentId}
+                      >
+                        {isDeleting === doc.documentId ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -101,8 +101,16 @@ export async function POST(req) {
             .limit(10)
             .toArray();
 
+          let usedSourceNames = [];
           if (results.length > 0) {
             const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
+            
+            // Identify unique source names for citations
+            const uniqueDocIds = [...new Set(results.map(r => r.documentId))];
+            const attachedDocs = await prisma.attachedDocument.findMany({
+              where: { documentId: { in: uniqueDocIds }, chatId }
+            });
+            usedSourceNames = [...new Set(attachedDocs.map(d => d.name))];
 
             const ragMessage = {
               role: 'system',
@@ -116,8 +124,11 @@ export async function POST(req) {
 
             // Insert just before the last message
             messages.splice(messages.length - 1, 0, ragMessage);
-            console.log(`[RAG] ✓ Injected ${results.length} chunks.`);
+            console.log(`[RAG] ✓ Injected ${results.length} chunks from ${usedSourceNames.join(', ')}.`);
           }
+          
+          // Store used sources in a variable accessible to the stream finisher
+          req.usedSourceNames = usedSourceNames;
         }
       } catch (ragError) {
         console.error('[RAG] Retrieval Error:', ragError);
@@ -152,7 +163,13 @@ export async function POST(req) {
           console.error("Stream error", e);
           controller.error(e);
         } finally {
-          // 6. When done streaming, save the assistant message
+          // 6. When done streaming, append sources if any were used
+          if (req.usedSourceNames && req.usedSourceNames.length > 0) {
+            const sourcesBlock = `\n\n<div class="sources-citation">**Sources:** ${req.usedSourceNames.join(', ')}</div>`;
+            assistantFullResponse += sourcesBlock;
+            controller.enqueue(encoder.encode(sourcesBlock));
+          }
+
           if (assistantFullResponse) {
             await prisma.message.create({
               data: {
