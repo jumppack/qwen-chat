@@ -15,9 +15,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { title = 'New Chat' } = await request.json().catch(() => ({}));
+    const { title = 'New Chat', model = 'qwen2.5-coder:32b' } = await request.json().catch(() => ({}));
     const chat = await prisma.chat.create({
-      data: { title }
+      data: { title, model }
     });
     return NextResponse.json(chat);
   } catch (error) {

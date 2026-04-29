@@ -31,6 +31,15 @@ export default function Home() {
   const [libraryDocs, setLibraryDocs] = useState([]);
   const [isDeleting, setIsDeleting] = useState(null); // documentId
 
+  // Model Switching State
+  const availableModels = [
+    { id: 'qwen2.5-coder:32b', name: 'Qwen 2.5 Coder (32B)' },
+    { id: 'qwen3.6:27b', name: 'Qwen 3.6 (27B)' }
+  ];
+  const [activeModel, setActiveModel] = useState(availableModels[0].id);
+  const [isModelSwitching, setIsModelSwitching] = useState(false);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
   const selectChat = async (id) => {
     setActiveChatId(id);
     const res = await fetch(`/api/chats/${id}`);
@@ -48,6 +57,13 @@ export default function Home() {
       setStagedFiles(hydratedFiles);
     } else {
       setStagedFiles([]);
+    }
+
+    // Hydrate model
+    if (data.model) {
+      setActiveModel(data.model);
+    } else {
+      setActiveModel('qwen2.5-coder:32b');
     }
   };
 
@@ -118,6 +134,31 @@ export default function Home() {
       console.error('Delete error:', error);
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const handleModelChange = async (newModelId) => {
+    if (newModelId === activeModel || isModelSwitching) return;
+    
+    setIsModelSwitching(true);
+    setIsModelDropdownOpen(false);
+    
+    try {
+      const res = await fetch('/api/model/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentModel: activeModel, newModel: newModelId })
+      });
+      
+      if (res.ok) {
+        setActiveModel(newModelId);
+      } else {
+        console.error('Failed to switch model');
+      }
+    } catch (err) {
+      console.error('Switch error', err);
+    } finally {
+      setIsModelSwitching(false);
     }
   };
 
@@ -217,6 +258,7 @@ export default function Home() {
           chatId: currentChatId,
           content: userMessage.content,
           documents: readyDocuments,
+          model: activeModel
         }),
         signal: abortControllerRef.current.signal
       });
@@ -299,7 +341,46 @@ export default function Home() {
       {/* Main Chat Area */}
       <main className="main-chat">
         <header className="chat-header">
-          {chats.find(c => c.id === activeChatId)?.title || 'Local Qwen-2.5 32B'}
+          <div className="header-left">
+            {chats.find(c => c.id === activeChatId)?.title || 'New Chat'}
+          </div>
+          
+          <div className="model-selector-container">
+            <button 
+              className={`model-selector-btn ${isModelSwitching ? 'switching' : ''}`}
+              onClick={() => !isModelSwitching && setIsModelDropdownOpen(!isModelDropdownOpen)}
+              disabled={isModelSwitching}
+            >
+              <span className="model-name">
+                {availableModels.find(m => m.id === activeModel)?.name}
+              </span>
+              {isModelSwitching ? (
+                <span className="pill-spinner model-spinner" />
+              ) : (
+                <svg className="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              )}
+            </button>
+            
+            {isModelDropdownOpen && !isModelSwitching && (
+              <>
+                <div className="dropdown-overlay" onClick={() => setIsModelDropdownOpen(false)} />
+                <div className="model-dropdown">
+                  {availableModels.map(model => (
+                    <button
+                      key={model.id}
+                      className={`model-option ${activeModel === model.id ? 'selected' : ''}`}
+                      onClick={() => handleModelChange(model.id)}
+                    >
+                      {model.name}
+                      {activeModel === model.id && (
+                        <svg className="check-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
@@ -407,19 +488,23 @@ export default function Home() {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => !isUploading && handleKeyDown(e)}
-              placeholder={isUploading ? 'Waiting for upload to finish...' : 'Message Qwen...'}
+              onKeyDown={(e) => !isUploading && !isModelSwitching && handleKeyDown(e)}
+              placeholder={
+                isModelSwitching ? 'Swapping model memory...' :
+                isUploading ? 'Waiting for upload to finish...' : 'Message Qwen...'
+              }
               rows={1}
+              disabled={isModelSwitching}
             />
             {isTyping ? (
-              <button className="send-btn stop-btn" onClick={stopGeneration} title="Stop generation">
+              <button className="send-btn stop-btn" onClick={stopGeneration} title="Stop generation" disabled={isModelSwitching}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
               </button>
             ) : (
               <button
                 className="send-btn"
                 onClick={sendMessage}
-                disabled={!input.trim() || isUploading}
+                disabled={!input.trim() || isUploading || isModelSwitching}
                 title={isUploading ? 'Waiting for file to finish uploading...' : undefined}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>

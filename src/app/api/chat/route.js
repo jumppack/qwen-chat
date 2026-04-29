@@ -5,7 +5,7 @@ import { generateEmbedding } from '@/lib/embeddings';
 
 export async function POST(req) {
   try {
-    const { chatId, content, documents: documentMetas } = await req.json();
+    const { chatId, content, documents: documentMetas, model } = await req.json();
 
     if (!chatId || !content) {
       return new Response(JSON.stringify({ error: 'Missing chatId or content' }), { status: 400 });
@@ -23,15 +23,8 @@ export async function POST(req) {
     // 1.5 Persist document metadata if provided
     if (Array.isArray(documentMetas) && documentMetas.length > 0) {
       for (const doc of documentMetas) {
-        // Use upsert to avoid duplicates if the message is retried or sent with same docs
         await prisma.attachedDocument.upsert({
-          where: { 
-            // We need a unique constraint for upsert to work effectively, 
-            // or we just use findFirst + create.
-            // Since we don't have a unique constraint on (chatId, documentId), 
-            // let's just do a check then create.
-            id: `${chatId}-${doc.documentId}` // We'll manually construct a deterministic ID for idempotency
-          },
+          where: { id: `${chatId}-${doc.documentId}` },
           update: {},
           create: {
             id: `${chatId}-${doc.documentId}`,
@@ -53,6 +46,26 @@ export async function POST(req) {
       }
     });
 
+    // Determine which model to use
+    // Priority: Request body > DB saved model > default
+    const activeModel = model || chat.model || 'qwen2.5-coder:32b';
+
+    // If the model changed or this is the first message (title generation needed)
+    let chatUpdates = {};
+    if (chat.model !== activeModel) {
+      chatUpdates.model = activeModel;
+    }
+    if (chat.messages.length === 1 || chat.title === 'New Chat') {
+      chatUpdates.title = content.length > 30 ? content.substring(0, 30) + '...' : content;
+    }
+    
+    if (Object.keys(chatUpdates).length > 0) {
+      await prisma.chat.update({
+        where: { id: chatId },
+        data: chatUpdates
+      });
+    }
+
     // We only need role and content for Ollama
     const messages = chat.messages.map(msg => ({
       role: msg.role,
@@ -64,15 +77,6 @@ export async function POST(req) {
       role: 'system',
       content: "You are an AI assistant running locally and securely on Karan's Apple Silicon Mac. You are not connected to Alibaba Cloud servers or any remote APIs. If asked about your identity or location, state that you are a local AI running on this Apple M5 Mac. Never mention Alibaba Cloud."
     });
-
-    // If this is the first real user message, optionally update the chat title
-    if (chat.messages.length === 1 || chat.title === 'New Chat') {
-      const generatedTitle = content.length > 30 ? content.substring(0, 30) + '...' : content;
-      await prisma.chat.update({
-        where: { id: chatId },
-        data: { title: generatedTitle }
-      });
-    }
 
     // 3. RAG Retrieval — only if document metadata was supplied
     if (Array.isArray(documentMetas) && documentMetas.length > 0) {
@@ -92,7 +96,6 @@ export async function POST(req) {
           const table = await db.openTable('documents');
 
           // OPTIMIZATION: Use native LanceDB SQL-like filtering for the specific document IDs
-          // Format: documentId IN ("id1", "id2")
           const filterStr = `documentId IN (${docIds.map(id => `"${id}"`).join(', ')})`;
           
           const results = await table
@@ -139,7 +142,7 @@ export async function POST(req) {
 
     // 4. Request streaming response from Ollama
     const responseStream = await ollama.chat({
-      model: 'qwen2.5-coder:32b',
+      model: activeModel,
       messages,
       stream: true,
     });

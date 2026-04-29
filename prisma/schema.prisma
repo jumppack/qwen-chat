@@ -10,11 +10,13 @@ datasource db {
 model Chat {
   id        String    @id @default(uuid())
   title     String
+  model     String    @default("qwen2.5-coder:32b")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
   documents AttachedDocument[]
 }
+
 
 model Message {
   id        String   @id @default(uuid())
