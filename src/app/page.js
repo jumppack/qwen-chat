@@ -30,6 +30,7 @@ export default function Home() {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [libraryDocs, setLibraryDocs] = useState([]);
   const [isDeleting, setIsDeleting] = useState(null); // documentId
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // documentId for 2-step delete
 
   // Model Switching State
   const availableModels = [
@@ -123,7 +124,6 @@ export default function Home() {
   };
 
   const deleteDocumentGlobally = async (documentId) => {
-    if (!confirm('Are you sure? This will remove the document from ALL chats.')) return;
     setIsDeleting(documentId);
     try {
       await fetch(`/api/documents/${documentId}`, { method: 'DELETE' });
@@ -134,6 +134,7 @@ export default function Home() {
       console.error('Delete error:', error);
     } finally {
       setIsDeleting(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -533,13 +534,23 @@ export default function Home() {
                         <span className="doc-name">{doc.name}</span>
                         <span className="doc-date">Added on {new Date(doc.createdAt).toLocaleDateString()}</span>
                       </div>
-                      <button 
-                        className="delete-doc-btn" 
-                        onClick={() => deleteDocumentGlobally(doc.documentId)}
-                        disabled={isDeleting === doc.documentId}
-                      >
-                        {isDeleting === doc.documentId ? 'Deleting...' : 'Delete'}
-                      </button>
+                      {confirmDeleteId === doc.documentId ? (
+                        <button 
+                          className="delete-doc-btn confirm" 
+                          onClick={(e) => { e.stopPropagation(); deleteDocumentGlobally(doc.documentId); }}
+                          disabled={isDeleting === doc.documentId}
+                          title="Click again to confirm global deletion"
+                        >
+                          {isDeleting === doc.documentId ? 'Deleting...' : 'Are you sure?'}
+                        </button>
+                      ) : (
+                        <button 
+                          className="delete-doc-btn" 
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(doc.documentId); }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
