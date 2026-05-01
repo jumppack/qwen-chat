@@ -106,27 +106,32 @@ export async function POST(req) {
 
           let usedSourceNames = [];
           if (results.length > 0) {
-            const retrievedContext = results.map(r => r.text).join('\n\n---\n\n');
-            
             // Identify unique source names for citations
             const uniqueDocIds = [...new Set(results.map(r => r.documentId))];
             const attachedDocs = await prisma.attachedDocument.findMany({
               where: { documentId: { in: uniqueDocIds }, chatId }
             });
+            const docIdToName = {};
+            attachedDocs.forEach(d => { docIdToName[d.documentId] = d.name; });
+            
             usedSourceNames = [...new Set(attachedDocs.map(d => d.name))];
 
-            const ragMessage = {
-              role: 'system',
-              content:
-                'CRITICAL: The user has uploaded relevant documents. Below are excerpts. ' +
-                'Use ONLY this information to answer if possible.\n\n' +
-                '--- DOCUMENT CONTEXT START ---\n' + 
-                retrievedContext + 
-                '\n--- DOCUMENT CONTEXT END ---'
-            };
+            const retrievedContext = results.map(r => {
+              const docName = docIdToName[r.documentId] || 'Unknown Document';
+              return `[Source: ${docName}]\nExcerpt:\n${r.text}`;
+            }).join('\n\n---\n\n');
 
-            // Insert just before the last message
-            messages.splice(messages.length - 1, 0, ragMessage);
+            // Find the last user message to append the context
+            const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+            if (lastUserMessageIndex !== -1) {
+              messages[lastUserMessageIndex].content += '\n\n' +
+                '--- RAG CONTEXT BELOW ---\n' +
+                'You must use the provided document context below to answer the query. ' +
+                'When using information from the context, explicitly cite the source document name using the format [Source: Document Name].\n\n' +
+                retrievedContext +
+                '\n--- RAG CONTEXT END ---';
+            }
+
             console.log(`[RAG] ✓ Injected ${results.length} chunks from ${usedSourceNames.join(', ')}.`);
           }
           
@@ -166,13 +171,6 @@ export async function POST(req) {
           console.error("Stream error", e);
           controller.error(e);
         } finally {
-          // 6. When done streaming, append sources if any were used
-          if (req.usedSourceNames && req.usedSourceNames.length > 0) {
-            const sourcesBlock = `\n\n<div class="sources-citation">**Sources:** ${req.usedSourceNames.join(', ')}</div>`;
-            assistantFullResponse += sourcesBlock;
-            controller.enqueue(encoder.encode(sourcesBlock));
-          }
-
           if (assistantFullResponse) {
             await prisma.message.create({
               data: {
