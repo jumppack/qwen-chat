@@ -146,6 +146,12 @@ body {
   border-color: var(--border-color);
 }
 
+.model-selector-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--text-secondary);
+}
+
 .model-selector-btn.switching {
   opacity: 0.7;
   cursor: not-allowed;
