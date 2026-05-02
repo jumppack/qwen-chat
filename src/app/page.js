@@ -20,6 +20,7 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
   const [stagedFiles, setStagedFiles] = useState([]); // { id, name, status: 'uploading'|'ready'|'error', documentId }
   const isUploading = stagedFiles.some((f) => f.status === 'uploading');
   const messagesEndRef = useRef(null);
@@ -100,10 +101,13 @@ export default function Home() {
     if (!messagesContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
     
+    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+    setIsScrolledUp(distanceToBottom > clientHeight * 0.5);
+    
     if (scrollTop < lastScrollTopRef.current) {
       // User scrolled up
       setIsAutoScrollEnabled(false);
-    } else if (scrollHeight - scrollTop - clientHeight <= 10) {
+    } else if (distanceToBottom <= 10) {
       // User reached the bottom
       setIsAutoScrollEnabled(true);
     }
@@ -349,8 +353,9 @@ export default function Home() {
           <div className="model-selector-container">
             <button 
               className={`model-selector-btn ${isModelSwitching ? 'switching' : ''}`}
-              onClick={() => !isModelSwitching && setIsModelDropdownOpen(!isModelDropdownOpen)}
-              disabled={isModelSwitching}
+              onClick={() => !isModelSwitching && !isTyping && setIsModelDropdownOpen(!isModelDropdownOpen)}
+              disabled={isModelSwitching || isTyping}
+              title={isTyping ? "Cannot switch model while generating response" : ""}
             >
               <span className="model-name">
                 {availableModels.find(m => m.id === activeModel)?.name}
@@ -362,7 +367,7 @@ export default function Home() {
               )}
             </button>
             
-            {isModelDropdownOpen && !isModelSwitching && (
+            {isModelDropdownOpen && !isModelSwitching && !isTyping && (
               <>
                 <div className="dropdown-overlay" onClick={() => setIsModelDropdownOpen(false)} />
                 <div className="model-dropdown">
@@ -385,13 +390,13 @@ export default function Home() {
         </header>
 
         <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
-          {!isAutoScrollEnabled && isTyping && (
+          {!isAutoScrollEnabled && isTyping && isScrolledUp && (
             <button className="scroll-popout" onClick={scrollToBottom}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <polyline points="19 12 12 19 5 12"></polyline>
               </svg>
-              Response generating ↓
+              Response generating
             </button>
           )}
 
