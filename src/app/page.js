@@ -92,9 +92,11 @@ export default function Home() {
     }
   }, [messages, isTyping, isAutoScrollEnabled]);
 
-  // Clear staged files when switching chats
+  // Clear staged files and reset scroll state when switching chats
   useEffect(() => {
     setStagedFiles([]);
+    setIsAutoScrollEnabled(true);
+    setIsScrolledUp(false);
   }, [activeChatId]);
 
   const handleScroll = () => {
