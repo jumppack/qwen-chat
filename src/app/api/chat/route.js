@@ -127,7 +127,7 @@ export async function POST(req) {
               messages[lastUserMessageIndex].content += '\n\n' +
                 '--- RAG CONTEXT BELOW ---\n' +
                 'You must use the provided document context below to answer the query. ' +
-                'When using information from the context, explicitly cite the source document name using the format [Source: Document Name].\n\n' +
+                'Do NOT cite the source after every sentence. Instead, list the document names you referenced at the very end of your response under a "**Sources:**" heading.\n\n' +
                 retrievedContext +
                 '\n--- RAG CONTEXT END ---';
             }
