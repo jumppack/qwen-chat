@@ -17,10 +17,11 @@ brew install ollama
 brew services start ollama
 ```
 
-### 2. Download the Model
-This application is configured to use the `qwen2.5-coder:32b` model. Pull it to your local machine:
+### 2. Download the Models
+This application supports dynamic model switching. It is configured out-of-the-box to use `qwen2.5-coder:32b` and `qwen3.6:27b`. Pull them to your local machine:
 ```bash
 ollama pull qwen2.5-coder:32b
+ollama pull qwen3.6:27b
 ```
 
 ## Step-by-Step Installation
@@ -56,7 +57,7 @@ ollama pull qwen2.5-coder:32b
 - **New Chat**: Click "New Chat" in the sidebar to start a fresh conversation.
 - **Local RAG & Document Uploads**: Upload PDF, TXT, or CSV files to the chat. The app uses an embedded LanceDB vector database to securely chunk and store document embeddings locally.
 - **Inline Citations**: The model actively understands document context and will naturally cite specific file names inline when drawing information from attached documents.
-- **Dynamic Model Switching**: Switch seamlessly between available local models (like `qwen2.5-coder:32b`) directly from the top menu.
+- **Dynamic Model Switching**: Switch seamlessly between available local models (like `qwen2.5-coder:32b` and `qwen3.6:27b`) directly from the top menu. Your selected model is saved independently for each chat session.
 - **Smart Auto-Scroll**: The app automatically scrolls down as the AI types. If you scroll up to read previous messages, the auto-scroll intelligently pauses and a "Response generating ↓" button appears.
 - **Markdown & Code Highlighting**: Code blocks are automatically formatted and highlighted for readability.
 - **Persistent Memory**: All your chats are securely saved to the `prisma/dev.db` SQLite file on your local hard drive. They will be there even if you restart your computer!
