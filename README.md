@@ -6,7 +6,7 @@ This project allows you to run large language models (like `qwen2.5-coder:32b` a
 
 ## Quick Start (One-Command Launch)
 
-You can launch all required services (Ollama backend & Next.js frontend) with a single command:
+If you already have Node.js and Ollama installed, you can start all services (Ollama AI server & Next.js frontend) with a single command:
 
 ```bash
 ./start.sh
@@ -14,7 +14,7 @@ You can launch all required services (Ollama backend & Next.js frontend) with a 
 npm run start:services
 ```
 
-The startup script will automatically check if the Ollama service is active (starting it if needed), verify the Prisma database setup, and start the Next.js server at [http://localhost:3000](http://localhost:3000).
+The startup script automatically checks if Ollama is running (starting `ollama serve` if needed), verifies the local Prisma SQLite database setup, and starts the Next.js development server at [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -24,11 +24,13 @@ Before starting, ensure you have the following installed on your machine:
 1. **Node.js** (v18 or higher)
 2. **Ollama** (The local AI engine)
 
-### 1. Install Ollama
+### 1. Install and Start Ollama
 If you haven't installed Ollama, download it from [ollama.com](https://ollama.com/) or install it via Homebrew on macOS:
 ```bash
 brew install ollama
+brew services start ollama
 ```
+*(Alternatively, you can manually start the Ollama server anytime by running `ollama serve`)*
 
 ### 2. Download the Models
 This application supports dynamic model switching. It is configured out-of-the-box to use `qwen2.5-coder:32b` and `qwen3.6:27b`. Pull them to your local machine:
@@ -39,11 +41,11 @@ ollama pull qwen3.6:27b
 
 ---
 
-## Step-by-Step Setup
+## Step-by-Step Installation & Setup
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/qwen-chat.git
+   git clone https://github.com/jumppack/qwen-chat.git
    cd qwen-chat
    ```
 
@@ -54,25 +56,26 @@ ollama pull qwen3.6:27b
 
 3. **Set Up the Local Database**
    This app uses SQLite and Prisma to save your chat history locally.
-   ```bash
-   npx prisma db push
-   npx prisma generate
-   ```
+   - Run the Prisma migration to generate the `dev.db` file and build the Prisma client:
+     ```bash
+     npx prisma db push
+     npx prisma generate
+     ```
 
-4. **Start Services**
-   - **Automated Startup Script:**
+4. **Start the Application**
+   - **Option A: Automated Startup Script**
      ```bash
      ./start.sh
      ```
-   - **Manual Startup:**
-     Terminal 1:
-     ```bash
-     ollama serve
-     ```
-     Terminal 2:
-     ```bash
-     npm run dev
-     ```
+   - **Option B: Manual Startup**
+     - Terminal 1 (Ollama AI Server):
+       ```bash
+       ollama serve
+       ```
+     - Terminal 2 (Next.js Dev Server):
+       ```bash
+       npm run dev
+       ```
 
 5. **Open the Application**
    Navigate to [http://localhost:3000](http://localhost:3000) in your web browser.
