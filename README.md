@@ -2,7 +2,21 @@
 
 A premium, fully local ChatGPT clone built with **Next.js**, **SQLite**, and **Ollama**. It features real-time streaming, persistent chat history, and a modern glassmorphic dark-mode UI. 
 
-This project allows you to run large language models (like `qwen2.5-coder:32b`) completely offline on your own hardware, with zero reliance on paid APIs.
+This project allows you to run large language models (like `qwen2.5-coder:32b` and `qwen3.6:27b`) completely offline on your own hardware, with zero reliance on paid APIs.
+
+## Quick Start (One-Command Launch)
+
+You can launch all required services (Ollama backend & Next.js frontend) with a single command:
+
+```bash
+./start.sh
+# or
+npm run start:services
+```
+
+The startup script will automatically check if the Ollama service is active (starting it if needed), verify the Prisma database setup, and start the Next.js server at [http://localhost:3000](http://localhost:3000).
+
+---
 
 ## Prerequisites
 
@@ -10,11 +24,10 @@ Before starting, ensure you have the following installed on your machine:
 1. **Node.js** (v18 or higher)
 2. **Ollama** (The local AI engine)
 
-### 1. Install and Start Ollama
+### 1. Install Ollama
 If you haven't installed Ollama, download it from [ollama.com](https://ollama.com/) or install it via Homebrew on macOS:
 ```bash
 brew install ollama
-brew services start ollama
 ```
 
 ### 2. Download the Models
@@ -24,7 +37,9 @@ ollama pull qwen2.5-coder:32b
 ollama pull qwen3.6:27b
 ```
 
-## Step-by-Step Installation
+---
+
+## Step-by-Step Setup
 
 1. **Clone the Repository**
    ```bash
@@ -39,19 +54,30 @@ ollama pull qwen3.6:27b
 
 3. **Set Up the Local Database**
    This app uses SQLite and Prisma to save your chat history locally.
-   - Run the Prisma migration to generate the `dev.db` file and build the Prisma client:
-     ```bash
-     npx prisma db push
-     npx prisma generate
-     ```
-
-4. **Start the Development Server**
    ```bash
-   npm run dev
+   npx prisma db push
+   npx prisma generate
    ```
+
+4. **Start Services**
+   - **Automated Startup Script:**
+     ```bash
+     ./start.sh
+     ```
+   - **Manual Startup:**
+     Terminal 1:
+     ```bash
+     ollama serve
+     ```
+     Terminal 2:
+     ```bash
+     npm run dev
+     ```
 
 5. **Open the Application**
    Navigate to [http://localhost:3000](http://localhost:3000) in your web browser.
+
+---
 
 ## Features & Usage
 - **New Chat**: Click "New Chat" in the sidebar to start a fresh conversation.
